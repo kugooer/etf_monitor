@@ -59,10 +59,11 @@ def fetch_etf_name_from_api(code: str) -> str | None:
     """从 akshare 获取 ETF 名称"""
     try:
         import akshare as ak
-        df = ak.fund_etf_hist_em(symbol=code, period="daily", adjust="qfq")
-        if df is not None and len(df) > 0:
-            name = df.iloc[0].get("日期") or df.columns[0]
-            return f"{code}ETF"
+        df = ak.fund_etf_spot_em()
+        match = df[df["代码"] == code]
+        if not match.empty:
+            name = match.iloc[0].get("名称", "")
+            return name if name else None
     except:
         pass
     return None
