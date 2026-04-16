@@ -28,4 +28,5 @@ jobs:
           ETF_NAMES: ${{ secrets.ETF_NAMES }}
           PROXY_URL: ${{ secrets.PROXY_URL }}
           BARK_URL: ${{ secrets.BARK_URL }}
+          BARK_GROUP: ${{ secrets.BARK_GROUP }}
         run: python etf_dingtou_monitor.py

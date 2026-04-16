@@ -19,6 +19,13 @@ def get_baostock_code(code: str) -> str:
     else:
         return f"sz.{code}"
 
+def get_eastmoney_secid(code: str) -> str:
+    """根据代码规则判断secid: 5开头=上海(1), 其他=深圳(0)"""
+    if code.startswith("5"):
+        return f"1.{code}"
+    else:
+        return f"0.{code}"
+
 # ── 日志 ──────────────────────────────────────────────────────────
 LOG_DIR = os.path.join(os.path.dirname(__file__), "logs")
 LOG_FILE = os.path.join(LOG_DIR, "etf_monitor.log")
@@ -73,6 +80,7 @@ MA_PERIOD = 250
 
 PROXY_URL = os.getenv("PROXY_URL", "")
 BARK_URL = os.getenv("BARK_URL", "")
+BARK_GROUP = os.getenv("BARK_GROUP", "")
 
 # ── 数据获取 ──────────────────────────────────────────────────────
 def fetch_etf_price(code: str) -> float | None:
@@ -86,9 +94,10 @@ def fetch_etf_price(code: str) -> float | None:
     # ① 东方财富 HTTP API
     try:
         base = PROXY_URL if PROXY_URL else "https://push2his.eastmoney.com"
+        secid = get_eastmoney_secid(code)
         url = (
             f"{base}/api/qt/stock/kline/get"
-            f"?secid=1.{code}&fields1=f1,f2,f3,f4,f5"
+            f"?secid={secid}&fields1=f1,f2,f3,f4,f5"
             f"&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61"
             f"&klt=101&fqt=1&end=20500101&lmt=250"
         )
@@ -96,7 +105,6 @@ def fetch_etf_price(code: str) -> float | None:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-        log(f"[eastmoney-api] 原始数据: {data}")
         klines = data.get("data", {}).get("klines", [])
         if klines:
             log(f"[eastmoney-api] K线数据条数: {len(klines)}")
@@ -162,9 +170,10 @@ def fetch_historical_prices(code: str, days: int = 260) -> list[float] | None:
     for _ in range(3):
         try:
             base = PROXY_URL if PROXY_URL else "https://push2his.eastmoney.com"
+            secid = get_eastmoney_secid(code)
             url = (
                 f"{base}/api/qt/stock/kline/get"
-                f"?secid=1.{code}&fields1=f1,f2,f3,f4,f5"
+                f"?secid={secid}&fields1=f1,f2,f3,f4,f5"
                 f"&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61"
                 f"&klt=101&fqt=1&end=20500101&lmt={days}"
             )
@@ -221,6 +230,8 @@ def send_notification(title: str, body: str):
     if BARK_URL:
         try:
             url = f"{BARK_URL}/{urllib.parse.quote(title)}/{urllib.parse.quote(body)}"
+            if BARK_GROUP:
+                url += f"?group={urllib.parse.quote(BARK_GROUP)}"
             req = urllib.request.Request(url, method="GET")
             req.add_header("User-Agent", "Mozilla/5.0")
             urllib.request.urlopen(req, timeout=10)
