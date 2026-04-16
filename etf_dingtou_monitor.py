@@ -82,7 +82,31 @@ def fetch_etf_price(code: str) -> float | None:
     import urllib.request
     import urllib.error
 
-    # ① akshare — fund_etf_hist
+    # ① 东方财富 HTTP API
+    try:
+        url = (
+            f"https://push2his.eastmoney.com/api/qt/stock/kline/get"
+            f"?secid=1.{code}&fields1=f1,f2,f3,f4,f5"
+            f"&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61"
+            f"&klt=101&fqt=1&end=20500101&lmt=250"
+        )
+        log(f"[eastmoney-api] 请求URL: {url}")
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        log(f"[eastmoney-api] 原始数据: {data}")
+        klines = data.get("data", {}).get("klines", [])
+        if klines:
+            log(f"[eastmoney-api] K线数据条数: {len(klines)}")
+            log(f"[eastmoney-api] 最新K线: {klines[-1]}")
+            last = klines[-1].split(",")
+            close = float(last[2])
+            log(f"[eastmoney-api] 成功获取 {code} 最新收盘价: {close}")
+            return close
+    except Exception as e:
+        log(f"[eastmoney-api] {code} 获取失败: {e}", "WARN")
+
+    # ② akshare — fund_etf_hist
     try:
         import akshare as ak
         df = ak.fund_etf_hist_em(symbol=code, period="daily", adjust="qfq")
@@ -94,7 +118,7 @@ def fetch_etf_price(code: str) -> float | None:
     except Exception as e:
         log(f"[akshare] {code} 获取失败: {e}", "WARN")
 
-    # ② baostock — 日K线
+    # ③ baostock — 日K线
     try:
         import baostock as bs
         lg = bs.login()
@@ -119,27 +143,6 @@ def fetch_etf_price(code: str) -> float | None:
                         return close
     except Exception as e:
         log(f"[baostock] {code} 获取失败: {e}", "WARN")
-
-    # ③ 东方财富 HTTP API（兜底）
-    try:
-        url = (
-            f"https://push2his.eastmoney.com/api/qt/stock/kline/get"
-            f"?secid=1.{code}&fields1=f1,f2,f3,f4,f5"
-            f"&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61"
-            f"&klt=101&fqt=1&end=20500101&lmt=250"
-        )
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        klines = data.get("data", {}).get("klines", [])
-        if klines:
-            # 最后一条: "2026-04-09,3.45,3.48,3.50,3.43,12345678,3.48"
-            last = klines[-1].split(",")
-            close = float(last[2])   # 第3列是收盘价
-            log(f"[eastmoney-api] 成功获取 {code} 最新收盘价: {close}")
-            return close
-    except Exception as e:
-        log(f"[eastmoney-api] {code} 获取失败: {e}", "WARN")
 
     log(f"[全部数据源失败] 无法获取 {code} 今日价格", "ERROR")
     return None
@@ -250,7 +253,7 @@ def process_etf(code: str):
         return
 
     # ② 获取历史价格 → 计算 MA250
-    prices = fetch_historical_prices(code, days=MA_PERIOD + 20)
+    prices = fetch_historical_prices(code, days=MA_PERIOD + 50)
     if prices is None or len(prices) < MA_PERIOD:
         send_notification(
             f"{name} 数据不足",
