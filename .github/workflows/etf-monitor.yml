@@ -27,4 +27,6 @@ jobs:
       - name: Run ETF monitor
         env:
           ETF_CODES: ${{ secrets.ETF_CODES }}
+          ETF_NAMES: ${{ secrets.ETF_NAMES }}
+          BARK_URL: ${{ secrets.BARK_URL }}
         run: python etf_dingtou_monitor.py
